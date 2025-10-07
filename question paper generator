@@ -1,0 +1,100 @@
+# Install necessary packages (run this cell first)
+!pip install PyPDF2 python-docx transformers torch --quiet
+
+# Import libraries
+import PyPDF2
+from docx import Document
+from google.colab import files
+import re
+
+# Upload the syllabus PDF file
+uploaded = files.upload()
+pdf_path = list(uploaded.keys())[0]
+print(f"Syllabus uploaded: {pdf_path}")
+
+# Function to extract text from PDF
+def extract_text_from_pdf(pdf_file):
+    text = ""
+    with open(pdf_file, "rb") as file:
+        reader = PyPDF2.PdfReader(file)
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+    return text
+
+syllabus_text = extract_text_from_pdf(pdf_path)
+print("✅ Extracted syllabus text preview:\n")
+print(syllabus_text[:1000])  # Preview first 1000 chars
+
+# Extract topics from syllabus by splitting on keywords like UNIT, and filtering meaningful lines
+def extract_topics(text):
+    # Split based on 'UNIT' keyword to separate units/topics
+    units = re.split(r"UNIT\s+[IVX]+", text, flags=re.IGNORECASE)
+    
+    topics = []
+    for unit_text in units:
+        # Clean newlines, excessive spaces
+        clean_text = re.sub(r"\s+", " ", unit_text).strip()
+        if clean_text:
+            # Heuristic: split by dash or full stops or commas to get subtopics
+            split_topics = re.split(r"[-,\.]", clean_text)
+            for topic in split_topics:
+                topic = topic.strip()
+                # Filter short or irrelevant fragments
+                if len(topic) > 15:
+                    topics.append(topic)
+    return list(set(topics))  # Unique topics
+
+topics = extract_topics(syllabus_text)
+print(f"Extracted {len(topics)} topics for question generation.\n")
+
+# Generate the question paper in the required format (sample pattern)
+def create_question_paper(topics):
+    doc = Document()
+    
+    # Header info
+    doc.add_paragraph("Question Paper Code : 50960")
+    doc.add_paragraph("B.E./B.Tech. DEGREE EXAMINATIONS, APRIL/MAY 2024.")
+    doc.add_paragraph("Third Semester")
+    doc.add_paragraph("Computer and Communication Engineering")
+    doc.add_paragraph("EC 3354 - SIGNALS AND SYSTEMS")
+    doc.add_paragraph("(Common to Electronics and Communication Engineering/Electronics and Telecommunication Engineering and Medical Electronics)")
+    doc.add_paragraph("(Regulations 2021)")
+    doc.add_paragraph("\nTime : Three hours\tMaximum : 100 marks")
+    doc.add_paragraph("Answer ALL questions.")
+    doc.add_paragraph("\nPART A — (10 x 2 = 20 marks)")
+    
+    # PART A - 10 short questions from first 10 topics or repetitions if less
+    for i in range(10):
+        topic = topics[i] if i < len(topics) else topics[i % len(topics)]
+        # Generate simple 2 mark questions based on topic keywords
+        question = f"{i+1}. Define and explain {topic.lower()}."
+        doc.add_paragraph(question)
+    
+    doc.add_paragraph("\nPART B — (5 x 13 = 65 marks)")
+    
+    # PART B - 5 questions with subparts (a) and (b) from next topics or cycling topics
+    for i in range(5):
+        topic = topics[10 + i] if 10 + i < len(topics) else topics[(10 + i) % len(topics)]
+        question_a = f"({chr(97)}) Describe in detail the concept of {topic.lower()}."
+        question_b = f"(b) Explain the applications or examples related to {topic.lower()}."
+        doc.add_paragraph(f"{11+i}. {question_a}")
+        doc.add_paragraph(f"Or")
+        doc.add_paragraph(f"{question_b}")
+    
+    doc.add_paragraph("\nPART C — (1 x 15 = 15 marks)")
+    
+    # PART C - 1 big question from last topic or cycle back
+    topic = topics[15] if 15 < len(topics) else topics[15 % len(topics)]
+    doc.add_paragraph(f"16. (a) Analyze and discuss advanced aspects of {topic.lower()} with examples.")
+    doc.add_paragraph(f"Or")
+    doc.add_paragraph(f"(b) Critically evaluate the challenges and solutions related to {topic.lower()}.")
+    
+    # Save the document
+    doc.save("Generated_Question_Paper.docx")
+    print("✅ Question paper saved as 'Generated_Question_Paper.docx'.")
+
+# Call the function to create question paper
+create_question_paper(topics)
+
+# Download the generated Word file to your local system (Google Colab)
+files.download("Generated_Question_Paper.docx")
